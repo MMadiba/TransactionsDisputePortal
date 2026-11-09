@@ -1,0 +1,65 @@
+:root {
+  --portal-brand: #0b3d5c;
+  --portal-brand-accent: #1c7c9c;
+}
+
+html {
+  font-size: 15px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.bg-portal {
+  background: linear-gradient(90deg, var(--portal-brand), var(--portal-brand-accent));
+}
+
+.btn:focus-visible, .form-control:focus, .form-select:focus, .page-link:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+.text-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.amount-debit {
+  color: var(--bs-body-color);
+}
+
+.amount-credit {
+  color: var(--bs-success);
+}
+
+.table td, .table th {
+  vertical-align: middle;
+}
+
+/* Dispute history timeline */
+.timeline {
+  border-left: 2px solid var(--bs-border-color);
+  margin-left: .5rem;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 0 0 1rem 1.25rem;
+}
+
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: .35rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--portal-brand-accent);
+  border: 2px solid var(--bs-body-bg);
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}

@@ -1,0 +1,99 @@
+@model TransactionDetailsViewModel
+@{
+    var t = Model.Transaction;
+    ViewData["Title"] = t.Merchant;
+    var reasons = Enum.GetValues<DisputeReason>().Select(r => new SelectListItem(Display.Reason(r), r.ToString()));
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Transactions</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@t.Merchant</li>
+    </ol>
+</nav>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="h4 mb-0">@t.Merchant</h1>
+                        <div class="text-muted">@t.Description</div>
+                    </div>
+                    @if (t.Status == TransactionStatus.Pending)
+                    {
+                        <span class="badge text-bg-light border">Pending</span>
+                    }
+                </div>
+                <p class="display-6 my-3 @(t.Amount < 0 ? "amount-debit" : "amount-credit")">@Money.Format(t.Amount, t.Currency)</p>
+                <dl class="row mb-0">
+                    <dt class="col-5">Date</dt>
+                    <dd class="col-7">@Clock.FormatDateTime(t.PostedAtUtc)</dd>
+                    <dt class="col-5">Card</dt>
+                    <dd class="col-7">•••• @t.CardLast4</dd>
+                    <dt class="col-5">Reference</dt>
+                    <dd class="col-7"><code>@t.Reference</code></dd>
+                </dl>
+            </div>
+        </div>
+
+        @if (t.Disputes.Count > 0)
+        {
+            <div class="card shadow-sm mt-4">
+                <div class="card-body">
+                    <h2 class="h5">Disputes on this transaction</h2>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var d in t.Disputes)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <a asp-controller="Disputes" asp-action="Details" asp-route-id="@d.Id">@d.Reference</a>
+                                <span class="badge @Display.StatusBadge(d.Status)">@Display.Status(d.Status)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4">Dispute this transaction</h2>
+                @if (!t.CanDispute)
+                {
+                    <div class="alert alert-info mb-0" role="status">@t.CannotDisputeReason</div>
+                }
+                else
+                {
+                    <p class="text-muted">Tell us what happened and our disputes team will look into it. We'll keep you updated here, usually within 5 working days.</p>
+                    <form method="post" asp-action="Dispute" asp-route-id="@t.Id" novalidate>
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Reason" class="form-label"></label>
+                            <select asp-for="Form.Reason" asp-items="reasons" class="form-select">
+                                <option value="">Choose a reason…</option>
+                            </select>
+                            <span asp-validation-for="Form.Reason" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Form.Details" class="form-label"></label>
+                            <textarea asp-for="Form.Details" class="form-control" rows="5" maxlength="2000"
+                                      placeholder="For example: when it happened, whether you still have the card, and anything the merchant told you."></textarea>
+                            <span asp-validation-for="Form.Details" class="text-danger small"></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Submit dispute</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,91 @@
+@model TransactionsIndexViewModel
+@{
+    ViewData["Title"] = "Your transactions";
+    var routeValues = new Dictionary<string, string?>
+    {
+        ["search"] = Model.Search,
+        ["from"] = Model.From?.ToString("yyyy-MM-dd"),
+        ["to"] = Model.To?.ToString("yyyy-MM-dd")
+    };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">Your transactions</h1>
+        <p class="text-muted mb-0">See something you don't recognise? Open it to raise a dispute. You can dispute a transaction up to @Model.WindowDays days after it posts.</p>
+    </div>
+    <a class="btn btn-outline-primary" asp-controller="Disputes" asp-action="Index">View my disputes</a>
+</div>
+
+<form method="get" class="card card-body shadow-sm mb-3" role="search">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+            <label for="search" class="form-label">Search</label>
+            <input id="search" name="search" value="@Model.Search" class="form-control" placeholder="Merchant, description or reference" maxlength="100" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label for="from" class="form-label">From</label>
+            <input id="from" name="from" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" class="form-control" />
+        </div>
+        <div class="col-6 col-md-2">
+            <label for="to" class="form-label">To</label>
+            <input id="to" name="to" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" class="form-control" />
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-grow-1">Filter</button>
+            @if (Model.IsFiltered)
+            {
+                <a class="btn btn-outline-secondary" asp-action="Index">Clear</a>
+            }
+        </div>
+    </div>
+</form>
+
+@if (Model.Result.TotalCount == 0)
+{
+    <div class="card card-body text-center text-muted py-5">
+        @(Model.IsFiltered ? "No transactions match those filters." : "There are no transactions on your account yet.")
+    </div>
+}
+else
+{
+    <div class="card shadow-sm mb-3">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Merchant</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Model.Result.Items)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@Clock.FormatDate(t.PostedAtUtc)</td>
+                            <td>
+                                <a asp-action="Details" asp-route-id="@t.Id" class="fw-semibold text-decoration-none">@t.Merchant</a>
+                                <div class="small text-muted">@t.Description</div>
+                            </td>
+                            <td>
+                                @if (t.Status == TransactionStatus.Pending)
+                                {
+                                    <span class="badge text-bg-light border">Pending</span>
+                                }
+                                @if (t.LatestDispute is { } d)
+                                {
+                                    <span class="badge @Display.StatusBadge(d.Status)" title="Dispute @d.Reference">Dispute: @Display.Status(d.Status)</span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap @(t.Amount < 0 ? "amount-debit" : "amount-credit")">@Money.Format(t.Amount, t.Currency)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <partial name="_Pager" model="PagerViewModel.Create(Model.Result, routeValues)" />
+}

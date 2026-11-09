@@ -1,0 +1,59 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · Dispute Portal</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="bg-body-tertiary">
+    <a class="visually-hidden-focusable" href="#main">Skip to content</a>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-dark bg-portal mb-4">
+            <div class="container">
+                <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">Dispute Portal</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                        aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div id="mainNav" class="navbar-collapse collapse justify-content-between">
+                    <ul class="navbar-nav">
+                        @if (User.IsInRole(Roles.Customer))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Transactions" asp-action="Index">Transactions</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Disputes" asp-action="Index">My disputes</a></li>
+                        }
+                        @if (User.IsInRole(Roles.Agent))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Agent" asp-action="Index">Dispute queue</a></li>
+                        }
+                    </ul>
+                    <partial name="_LoginPartial" />
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main" class="container pb-5">
+        @if (TempData["Flash"] is string flash)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="status">
+                @flash
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+        @RenderBody()
+    </main>
+
+    <footer class="border-top py-3 text-muted small">
+        <div class="container">
+            Spotted something you don't recognise? Dispute it here, or call us any time on 0800 000 000.
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

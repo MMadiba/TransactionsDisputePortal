@@ -1,0 +1,60 @@
+@model DisputeDetailsViewModel
+@{
+    var d = Model.Dispute;
+    ViewData["Title"] = $"Dispute {d.Reference}";
+    ViewData["Audience"] = Audience.Agent;
+    var outcomes = new[]
+    {
+        new SelectListItem("Uphold — refund the customer", nameof(DisputeOutcome.Upheld)),
+        new SelectListItem("Decline — the charge stands", nameof(DisputeOutcome.Declined))
+    };
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Dispute queue</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@d.Reference</li>
+    </ol>
+</nav>
+
+<div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+<partial name="_DisputeOverview" model="d" view-data="ViewData" />
+
+@if (d.IsOpen)
+{
+    <div class="card shadow-sm mt-4">
+        <div class="card-body">
+            <h2 class="h5">Actions</h2>
+
+            @if (d.Status == DisputeStatus.Submitted)
+            {
+                <form method="post" asp-action="StartReview" asp-route-id="@d.Id" class="mb-4">
+                    <button type="submit" class="btn btn-outline-primary">Start review</button>
+                    <span class="small text-muted ms-2">Lets the customer know someone is looking at it.</span>
+                </form>
+            }
+
+            <form method="post" asp-action="Resolve" asp-route-id="@d.Id" novalidate>
+                <div class="mb-3">
+                    <label asp-for="ResolveForm!.Outcome" class="form-label">Outcome</label>
+                    <select asp-for="ResolveForm!.Outcome" asp-items="outcomes" class="form-select">
+                        <option value="">Choose an outcome…</option>
+                    </select>
+                    <span asp-validation-for="ResolveForm!.Outcome" class="text-danger small"></span>
+                </div>
+                <div class="mb-3">
+                    <label asp-for="ResolveForm!.Note" class="form-label"></label>
+                    <textarea asp-for="ResolveForm!.Note" class="form-control" rows="3" maxlength="1000"
+                              placeholder="The customer will see this note exactly as written."></textarea>
+                    <span asp-validation-for="ResolveForm!.Note" class="text-danger small"></span>
+                </div>
+                <button type="submit" class="btn btn-primary">Close dispute</button>
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,94 @@
+@model DisputeDetail
+@{
+    var isAgent = ViewData["Audience"] is Audience.Agent;
+    var tx = Model.Transaction;
+}
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+    <h1 class="h3 mb-0">Dispute @Model.Reference</h1>
+    <span class="badge fs-6 @Display.StatusBadge(Model.Status)">@(isAgent ? Display.AgentStatus(Model.Status) : Display.Status(Model.Status))</span>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 card-title">What was reported</h2>
+                <dl class="row mb-0">
+                    @if (isAgent)
+                    {
+                        <dt class="col-sm-4">Customer</dt>
+                        <dd class="col-sm-8">@Model.CustomerName</dd>
+                    }
+                    <dt class="col-sm-4">Reason</dt>
+                    <dd class="col-sm-8">@Display.Reason(Model.Reason)</dd>
+                    <dt class="col-sm-4">Raised</dt>
+                    <dd class="col-sm-8">@Clock.FormatDateTime(Model.CreatedAtUtc)</dd>
+                    @if (Model.ClosedAtUtc is { } closed)
+                    {
+                        <dt class="col-sm-4">Closed</dt>
+                        <dd class="col-sm-8">@Clock.FormatDateTime(closed)</dd>
+                    }
+                    <dt class="col-sm-4">Details</dt>
+                    <dd class="col-sm-8 text-pre-wrap">@Model.Details</dd>
+                </dl>
+            </div>
+        </div>
+
+        @if (Model.ResolutionNote is { } note)
+        {
+            <div class="alert @(Model.Status == DisputeStatus.Upheld ? "alert-success" : "alert-secondary")">
+                <h2 class="h6">Outcome</h2>
+                <p class="mb-0 text-pre-wrap">@note</p>
+            </div>
+        }
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 card-title">Disputed transaction</h2>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Merchant</dt>
+                    <dd class="col-sm-8">
+                        @if (isAgent)
+                        {
+                            @tx.Merchant
+                        }
+                        else
+                        {
+                            <a asp-controller="Transactions" asp-action="Details" asp-route-id="@tx.Id">@tx.Merchant</a>
+                        }
+                    </dd>
+                    <dt class="col-sm-4">Amount</dt>
+                    <dd class="col-sm-8">@Money.Format(tx.Amount, tx.Currency)</dd>
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8">@Clock.FormatDateTime(tx.PostedAtUtc)</dd>
+                    <dt class="col-sm-4">Reference</dt>
+                    <dd class="col-sm-8"><code>@tx.Reference</code></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 card-title">History</h2>
+                <ol class="timeline list-unstyled mb-0">
+                    @foreach (var e in Model.Timeline)
+                    {
+                        <li class="timeline-item">
+                            <div class="d-flex justify-content-between gap-2">
+                                <strong>@(isAgent ? Display.AgentStatus(e.Status) : Display.Status(e.Status))</strong>
+                                <time class="text-muted small text-nowrap">@Clock.FormatDateTime(e.OccurredAtUtc)</time>
+                            </div>
+                            <div class="small text-muted">by @e.Actor</div>
+                            @if (e.Note is not null)
+                            {
+                                <div class="small mt-1 text-pre-wrap">@e.Note</div>
+                            }
+                        </li>
+                    }
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
