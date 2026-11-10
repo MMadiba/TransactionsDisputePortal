@@ -33,14 +33,17 @@ public sealed class UseCaseTests : IAsyncLifetime
         _f.QueryAsync<ListMyDisputesQuery, PagedResult<DisputeSummary>>(new ListMyDisputesQuery(CustomerId, filter));
 
     [Fact]
-    public async Task Opening_persists_the_aggregate_and_publishes_the_event_after_saving()
+    public async Task Opening_persists_the_aggregate_and_queues_the_event_in_the_outbox()
     {
         var tx = await _f.AddTransactionAsync();
 
         var detail = await OpenAsync(tx.Id);
 
         Assert.Equal(DisputeStatus.Submitted, detail.Status);
+        Assert.Empty(_f.Events.Received); // nothing is handled inside the request any more
+        Assert.Equal(1, await _f.ProcessOutboxAsync());
         Assert.Equal(detail.Id, Assert.Single(_f.Events.Received).DisputeId);
+        Assert.Equal(0, await _f.ProcessOutboxAsync()); // handled once, then marked done
         await _f.InScopeAsync(async sp =>
         {
             var saved = await sp.GetRequiredService<ApplicationDbContext>().Disputes.Include(d => d.History).SingleAsync();
@@ -165,5 +168,61 @@ public sealed class UseCaseTests : IAsyncLifetime
         Assert.False(creditDetail.CanDispute);
         Assert.Contains("credit", creditDetail.CannotDisputeReason, StringComparison.Ordinal);
         Assert.Contains("Pending", pendingDetail.CannotDisputeReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_failing_event_handler_does_not_fail_the_save_and_is_retried()
+    {
+        var tx = await _f.AddTransactionAsync();
+        _f.Events.FailWith = new InvalidOperationException("Mail server down");
+
+        var detail = await OpenAsync(tx.Id); // the customer's request still succeeds
+
+        Assert.Equal(0, await _f.ProcessOutboxAsync());
+        await _f.InScopeAsync(async sp =>
+        {
+            var message = await sp.GetRequiredService<ApplicationDbContext>().OutboxMessages.SingleAsync();
+            Assert.Equal((1, "Mail server down"), (message.Attempts, message.LastError));
+            Assert.Null(message.ProcessedAtUtc);
+            return 0;
+        });
+
+        _f.Events.FailWith = null;
+        Assert.Equal(1, await _f.ProcessOutboxAsync());
+        Assert.Equal(detail.Id, Assert.Single(_f.Events.Received).DisputeId);
+    }
+
+    [Fact]
+    public async Task A_message_that_keeps_failing_is_given_up_on()
+    {
+        var tx = await _f.AddTransactionAsync();
+        _f.Events.FailWith = new InvalidOperationException("Still broken");
+        await OpenAsync(tx.Id);
+
+        for (var i = 0; i < OutboxProcessor.MaxAttempts + 2; i++)
+        {
+            await _f.ProcessOutboxAsync();
+        }
+
+        await _f.InScopeAsync(async sp =>
+        {
+            var message = await sp.GetRequiredService<ApplicationDbContext>().OutboxMessages.SingleAsync();
+            Assert.Equal(OutboxProcessor.MaxAttempts, message.Attempts);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_declined_dispute_stops_the_customer_disputing_the_transaction_again()
+    {
+        var tx = await _f.AddTransactionAsync();
+        var opened = await OpenAsync(tx.Id);
+        await _f.SendAsync<StartReviewCommand, DisputeDetail>(new StartReviewCommand(AgentId, opened.Id));
+        await _f.SendAsync<ResolveDisputeCommand, DisputeDetail>(new ResolveDisputeCommand(AgentId, opened.Id,
+            new ResolveDisputeRequest { Outcome = DisputeOutcome.Declined, Note = "The charge is valid." }));
+
+        var ex = await Assert.ThrowsAsync<DomainConflictException>(() => OpenAsync(tx.Id));
+
+        Assert.Equal("dispute.already_decided", ex.Code);
     }
 }

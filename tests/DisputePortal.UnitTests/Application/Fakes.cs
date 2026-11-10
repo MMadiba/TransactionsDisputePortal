@@ -27,8 +27,8 @@ internal sealed class FakeDisputeRepository : IDisputeRepository
     public Task<Dispute?> GetOwnedByAsync(Guid disputeId, string customerId, CancellationToken cancellationToken) =>
         Task.FromResult(Items.SingleOrDefault(d => d.Id == disputeId && d.CustomerId == customerId));
 
-    public Task<Dispute?> FindLiveForTransactionAsync(Guid transactionId, CancellationToken cancellationToken) =>
-        Task.FromResult(Items.FirstOrDefault(d => d.TransactionId == transactionId && d.IsLive));
+    public Task<Dispute?> FindBlockingForTransactionAsync(Guid transactionId, CancellationToken cancellationToken) =>
+        Task.FromResult(Items.FirstOrDefault(d => d.TransactionId == transactionId && d.BlocksNewDisputes));
 
     public void Add(Dispute dispute) => Items.Add(dispute);
 }
@@ -52,7 +52,7 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
 
 internal sealed class FakeUserDirectory : IUserDirectory
 {
-    public Dictionary<string, string> Names { get; } = new() { ["customer-1"] = "Casey Customer", ["agent-1"] = "Avery Agent" };
+    public Dictionary<string, string> Names { get; } = new() { ["customer-1"] = "Casey Customer", ["agent-1"] = "Avery Agent", ["agent-2"] = "Bo Backup" };
 
     public Task<string?> GetDisplayNameAsync(string userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Names.GetValueOrDefault(userId));
@@ -81,7 +81,7 @@ internal sealed class FakeDisputeReadModel(FakeDisputeRepository disputes, FakeT
             d.CreatedAtUtc, d.UpdatedAtUtc, d.ClosedAtUtc,
             new TransactionSummary(t.Id, t.Reference, t.PostedAtUtc, t.Merchant, t.Description, t.Amount.Amount, t.Amount.Currency, t.Status, null),
             d.History.Select(h => new DisputeHistoryItem(h.Status, h.ActorRole, h.ActorName, h.Note, h.OccurredAtUtc)).ToList(),
-            d.IsOpen));
+            d.IsOpen, d.ReviewerId, d.ReviewerName));
     }
 }
 

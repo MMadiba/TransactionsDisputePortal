@@ -180,6 +180,22 @@ public sealed class ApiTests(PortalFactory factory)
     }
 
     [Fact]
+    public async Task A_dispute_cannot_be_closed_without_a_review()
+    {
+        var customer = await factory.ApiClientAsync(PortalFactory.Sipho);
+        var agent = await factory.ApiClientAsync(PortalFactory.Agent);
+        var tx = await FindTransactionAsync(customer, t => t.CanDispute && t.Merchant != "Kauai");
+        var opened = await ReadAsync<DisputeDetail>(await customer.PostAsJsonAsync($"/api/transactions/{tx.Id}/disputes",
+            new { reason = "GoodsOrServicesNotReceived", details = "The parcel never arrived and the merchant will not answer." }));
+
+        var resolved = await agent.PostAsJsonAsync($"/api/agent/disputes/{opened.Id}/resolve",
+            new { outcome = "Upheld", note = "Skipping straight to a refund." });
+
+        Assert.Equal(HttpStatusCode.Conflict, resolved.StatusCode);
+        Assert.Equal("dispute.review_required", (await resolved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Seeded_history_contains_disputes_in_every_closed_state()
     {
         var client = await factory.ApiClientAsync(PortalFactory.Amanda);

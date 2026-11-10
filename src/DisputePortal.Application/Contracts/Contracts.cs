@@ -70,7 +70,9 @@ public sealed record DisputeDetail(
     DateTime? ClosedAtUtc,
     TransactionSummary Transaction,
     IReadOnlyList<DisputeHistoryItem> Timeline,
-    bool IsOpen);
+    bool IsOpen,
+    string? ReviewerId,
+    string? ReviewerName);
 
 public sealed record AuthTokens(
     string TokenType, string AccessToken, int ExpiresIn, string RefreshToken, DateTime RefreshTokenExpiresAtUtc);

@@ -136,7 +136,9 @@ internal sealed class DisputeReadModel(ApplicationDbContext db) : IDisputeReadMo
                 .OrderBy(h => h.OccurredAtUtc)
                 .Select(h => new DisputeHistoryItem(h.Status, h.ActorRole, h.ActorName, h.Note, h.OccurredAtUtc))
                 .ToList(),
-            dispute.IsOpen);
+            dispute.IsOpen,
+            dispute.ReviewerId,
+            dispute.ReviewerName);
     }
 
     private static IQueryable<DisputeSummary> ToSummaries(IQueryable<Row> rows) =>

@@ -91,6 +91,17 @@ public sealed class JwtAuthTests(PortalFactory factory)
     }
 
     [Fact]
+    public async Task Two_simultaneous_refreshes_with_the_same_token_cannot_both_succeed()
+    {
+        var tokens = await SignInAsync();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => RefreshAsync(tokens.RefreshToken)));
+
+        Assert.True(responses.Count(r => r.StatusCode == HttpStatusCode.OK) <= 1);
+        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Revoked_refresh_tokens_cannot_be_used()
     {
         var tokens = await SignInAsync();

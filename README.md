@@ -47,10 +47,10 @@ In Development, demo data and a development-only JWT key are switched on for you
 dotnet test
 ```
 
-There are 71 tests:
+There are 83 tests:
 
 - **Unit tests** cover the domain rules, every use-case handler, and architecture checks that fail the build if the layering is broken.
-- **Integration tests** cover persistence against a real SQLite database. They also boot the whole app to test the website, the API and the JWT flows.
+- **Integration tests** cover persistence against a real SQLite database, including the outbox and its retries. They also boot the whole app to test the website, the API and the JWT flows.
 
 To run them in Docker instead:
 
@@ -86,8 +86,8 @@ Access tokens last 15 minutes. Use `/api/auth/refresh` to swap the refresh token
 | GET | `/api/disputes/{id}` | One dispute with its timeline |
 | POST | `/api/disputes/{id}/withdraw` | Withdraw an open dispute |
 | GET | `/api/agent/disputes` | Disputes team: the queue |
-| POST | `/api/agent/disputes/{id}/start-review` | Disputes team: pick one up |
-| POST | `/api/agent/disputes/{id}/resolve` | Disputes team: uphold or decline |
+| POST | `/api/agent/disputes/{id}/start-review` | Disputes team: pick one up (assigns it to you) |
+| POST | `/api/agent/disputes/{id}/resolve` | Disputes team: uphold or decline (reviewer only) |
 
 Errors come back as standard problem details with a stable `code`. The OpenAPI document is at `/openapi/v1.json` in Development.
 
@@ -106,10 +106,11 @@ Dependencies only point inwards: **Web → Infrastructure → Application → Do
 The `Dispute` aggregate enforces its own rules:
 - only posted debits can be disputed
 - they must be within 120 days
-- one live dispute per transaction
 - only the account holder can raise one
+- an agent must start a review before closing a dispute, and only that agent can close it
+- a transaction gets one decision: once a dispute is upheld or declined, the customer can't raise another on it, and appeals go through the bank's complaints process. A withdrawn dispute doesn't count, so the customer can raise a new one.
 
-Every change adds a timeline entry and raises a domain event.
+Every change adds a timeline entry and raises a domain event. Events are saved to an outbox table in the same transaction as the change, then handled by a background worker with retries. A failing handler can't lose an event or turn a saved dispute into an error.
 
 ## Configuration
 
@@ -130,3 +131,5 @@ Set anything in `appsettings.json` or with environment variables (`__` for nesti
 - Switch SQLite for SQL Server or PostgreSQL. Only Infrastructure would change.
 - Plug in a real email sender. Password-reset emails go nowhere yet.
 - Add receipt attachments and customer notifications on disputes.
+- Let a supervisor reassign a dispute, and require a second person to approve upheld refunds.
+- Support currencies that don't use two decimal places. Amounts currently assume cents, which is fine for ZAR.

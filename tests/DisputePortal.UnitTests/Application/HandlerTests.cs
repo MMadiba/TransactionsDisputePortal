@@ -96,14 +96,36 @@ public sealed class OpenDisputeHandlerTests
     {
         var opened = await Handler().HandleAsync(new OpenDisputeCommand("customer-1", _transaction.Id, Valid()));
         var readModel = new FakeDisputeReadModel(_disputes, _transactions);
+        var startReview = new StartReviewHandler(_disputes, new FakeUserDirectory(), _unitOfWork, readModel, new FixedClock(Now));
         var resolve = new ResolveDisputeHandler(_disputes, new FakeUserDirectory(), _unitOfWork, readModel, new FixedClock(Now));
 
+        await startReview.HandleAsync(new StartReviewCommand("agent-1", opened.Id));
         var agentView = await resolve.HandleAsync(new ResolveDisputeCommand("agent-1", opened.Id,
             new ResolveDisputeRequest { Outcome = DisputeOutcome.Declined, Note = "The charge is valid." }));
         var customerView = await new GetMyDisputeHandler(readModel).HandleAsync(new GetMyDisputeQuery("customer-1", opened.Id));
 
         Assert.Equal("Avery Agent", agentView.Timeline[^1].Actor);
-        Assert.Equal(["You", "Disputes team"], customerView.Timeline.Select(t => t.Actor));
+        Assert.Equal("Avery Agent", agentView.ReviewerName);
+        Assert.Equal(["You", "Disputes team", "Disputes team"], customerView.Timeline.Select(t => t.Actor));
+        Assert.Null(customerView.ReviewerId);
+        Assert.Null(customerView.ReviewerName);
+    }
+
+    [Fact]
+    public async Task Only_the_reviewing_agent_can_resolve()
+    {
+        var opened = await Handler().HandleAsync(new OpenDisputeCommand("customer-1", _transaction.Id, Valid()));
+        var readModel = new FakeDisputeReadModel(_disputes, _transactions);
+        await new StartReviewHandler(_disputes, new FakeUserDirectory(), _unitOfWork, readModel, new FixedClock(Now))
+            .HandleAsync(new StartReviewCommand("agent-1", opened.Id));
+        var resolve = new ResolveDisputeHandler(_disputes, new FakeUserDirectory(), _unitOfWork, readModel, new FixedClock(Now));
+        var saves = _unitOfWork.Saves;
+
+        var ex = await Assert.ThrowsAsync<DomainConflictException>(() => resolve.HandleAsync(new ResolveDisputeCommand("agent-2", opened.Id,
+            new ResolveDisputeRequest { Outcome = DisputeOutcome.Upheld, Note = "Refunded to your card." })));
+
+        Assert.Equal("dispute.not_reviewer", ex.Code);
+        Assert.Equal(saves, _unitOfWork.Saves);
     }
 }
 

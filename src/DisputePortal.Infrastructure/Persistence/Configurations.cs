@@ -43,12 +43,13 @@ internal sealed class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
         b.HasKey(d => d.Id);
         b.Ignore(d => d.DomainEvents);
         b.Ignore(d => d.IsOpen);
-        b.Ignore(d => d.IsLive);
+        b.Ignore(d => d.BlocksNewDisputes);
 
         b.Property(d => d.Reference).HasMaxLength(DisputeReference.MaxLength).IsRequired();
         b.Property(d => d.CustomerId).IsRequired();
         b.Property(d => d.Details).HasMaxLength(DisputeLimits.DetailsMaxLength).IsRequired();
         b.Property(d => d.ResolutionNote).HasMaxLength(DisputeLimits.ResolutionNoteMaxLength);
+        b.Property(d => d.ReviewerName).HasMaxLength(200);
         b.Property(d => d.Reason).HasConversion<string>().HasMaxLength(40);
         b.Property(d => d.Status).HasConversion<string>().HasMaxLength(16);
         b.Property(d => d.Version).IsConcurrencyToken();
@@ -56,6 +57,7 @@ internal sealed class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
         // Aggregates reference each other by id only, never by navigation.
         b.HasOne<Transaction>().WithMany().HasForeignKey(d => d.TransactionId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.ReviewerId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasMany(d => d.History).WithOne().HasForeignKey(h => h.DisputeId).OnDelete(DeleteBehavior.Cascade);
         b.Navigation(d => d.History).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -64,12 +66,12 @@ internal sealed class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
         b.HasIndex(d => new { d.CustomerId, d.CreatedAtUtc });
         b.HasIndex(d => new { d.Status, d.CreatedAtUtc });
 
-        // The database is the final word on "one live dispute per transaction": even if two requests race
-        // past the aggregate's check, only one insert can win.
+        // The database is the final word on "one non-withdrawn dispute per transaction" (Dispute.BlocksNewDisputes):
+        // even if two requests race past the aggregate's check, only one insert can win.
         b.HasIndex(d => d.TransactionId)
             .IsUnique()
             .HasFilter($"\"Status\" <> '{nameof(DisputeStatus.Withdrawn)}'")
-            .HasDatabaseName("IX_Disputes_TransactionId_Live");
+            .HasDatabaseName("IX_Disputes_TransactionId_NotWithdrawn");
     }
 }
 

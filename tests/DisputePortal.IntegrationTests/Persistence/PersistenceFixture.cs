@@ -55,6 +55,9 @@ public sealed class PersistenceFixture : IAsyncDisposable
 
     public RecordingEventHandler Events => _services.GetRequiredService<RecordingEventHandler>();
 
+    /// <summary>Does what the background outbox worker does, on demand.</summary>
+    public Task<int> ProcessOutboxAsync() => _services.GetRequiredService<OutboxProcessor>().ProcessPendingAsync();
+
     /// <summary>Runs <paramref name="action"/> in its own DI scope, like a single web request.</summary>
     public async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
     {
@@ -92,8 +95,16 @@ public sealed class RecordingEventHandler : IDomainEventHandler<Domain.Disputes.
 {
     public List<Domain.Disputes.DisputeOpened> Received { get; } = [];
 
+    /// <summary>When set, the handler throws this instead of recording the event.</summary>
+    public Exception? FailWith { get; set; }
+
     public Task HandleAsync(Domain.Disputes.DisputeOpened domainEvent, CancellationToken cancellationToken = default)
     {
+        if (FailWith is not null)
+        {
+            throw FailWith;
+        }
+
         Received.Add(domainEvent);
         return Task.CompletedTask;
     }

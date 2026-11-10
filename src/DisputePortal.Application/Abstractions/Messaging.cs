@@ -14,7 +14,10 @@ public interface IQueryHandler<in TQuery, TResult>
     Task<TResult> HandleAsync(TQuery query, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Reacts to a domain event after the change that raised it has been saved.</summary>
+/// <summary>
+/// Reacts to a domain event after the change that raised it has been saved. Events are delivered from an
+/// outbox at least once, so a handler may see the same event twice and must cope with that.
+/// </summary>
 public interface IDomainEventHandler<in TEvent> where TEvent : IDomainEvent
 {
     Task HandleAsync(TEvent domainEvent, CancellationToken cancellationToken = default);

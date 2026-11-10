@@ -62,7 +62,8 @@ internal sealed partial class AuthTokenService(
             return AuthTokenResult.Fail(AuthFailure.InvalidCredentials);
         }
 
-        return AuthTokenResult.Success(await IssueTokensAsync(user, previous: null, cancellationToken));
+        var (rawRefreshToken, refreshHash) = NewRefreshToken();
+        return AuthTokenResult.Success(await IssueTokensAsync(user, rawRefreshToken, refreshHash, cancellationToken));
     }
 
     public async Task<AuthTokenResult> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -88,21 +89,35 @@ internal sealed partial class AuthTokenService(
             return AuthTokenResult.Fail(AuthFailure.InvalidRefreshToken);
         }
 
-        return AuthTokenResult.Success(await IssueTokensAsync(user, stored, cancellationToken));
+        // Claim the old token with a conditional update, so if two requests refresh with the same token at
+        // once, only one of them wins. The loser is treated exactly like a replayed token.
+        var (rawRefreshToken, refreshHash) = NewRefreshToken();
+        var claimed = await db.RefreshTokens
+            .Where(r => r.Id == stored.Id && r.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.RevokedAtUtc, now)
+                .SetProperty(r => r.ReplacedByTokenHash, refreshHash), cancellationToken);
+        if (claimed == 0)
+        {
+            LogRefreshTokenReuse(stored.UserId);
+            await RevokeAllAsync(stored.UserId, now, cancellationToken);
+            return AuthTokenResult.Fail(AuthFailure.InvalidRefreshToken);
+        }
+
+        return AuthTokenResult.Success(await IssueTokensAsync(user, rawRefreshToken, refreshHash, cancellationToken));
     }
 
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var stored = await FindAsync(refreshToken, cancellationToken);
+        var hash = Hash(refreshToken);
         var now = time.GetUtcNow().UtcDateTime;
-        if (stored is not null && stored.IsActive(now))
-        {
-            stored.RevokedAtUtc = now;
-            await db.SaveChangesAsync(cancellationToken);
-        }
+        await db.RefreshTokens
+            .Where(r => r.TokenHash == hash && r.RevokedAtUtc == null && r.ExpiresAtUtc > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.RevokedAtUtc, now), cancellationToken);
     }
 
-    private async Task<AuthTokens> IssueTokensAsync(ApplicationUser user, RefreshToken? previous, CancellationToken cancellationToken)
+    private async Task<AuthTokens> IssueTokensAsync(
+        ApplicationUser user, string rawRefreshToken, string refreshHash, CancellationToken cancellationToken)
     {
         var now = time.GetUtcNow().UtcDateTime;
         var expires = now.AddMinutes(_options.AccessTokenMinutes);
@@ -127,31 +142,29 @@ internal sealed partial class AuthTokenService(
             SigningCredentials = new SigningCredentials(_options.CreateSigningKey(), SecurityAlgorithms.HmacSha256)
         });
 
-        var rawRefreshToken = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64));
         var refresh = new RefreshToken
         {
             UserId = user.Id,
-            TokenHash = Hash(rawRefreshToken),
+            TokenHash = refreshHash,
             CreatedAtUtc = now,
             ExpiresAtUtc = now.AddDays(_options.RefreshTokenDays)
         };
         db.RefreshTokens.Add(refresh);
-
-        if (previous is not null)
-        {
-            previous.RevokedAtUtc = now;
-            previous.ReplacedByTokenHash = refresh.TokenHash;
-        }
-
         await db.SaveChangesAsync(cancellationToken);
 
         return new AuthTokens("Bearer", accessToken, (int)(expires - now).TotalSeconds, rawRefreshToken, refresh.ExpiresAtUtc);
     }
 
+    private static (string Raw, string Hash) NewRefreshToken()
+    {
+        var raw = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64));
+        return (raw, Hash(raw));
+    }
+
     private Task<RefreshToken?> FindAsync(string rawToken, CancellationToken cancellationToken)
     {
         var hash = Hash(rawToken);
-        return db.RefreshTokens.SingleOrDefaultAsync(r => r.TokenHash == hash, cancellationToken);
+        return db.RefreshTokens.AsNoTracking().SingleOrDefaultAsync(r => r.TokenHash == hash, cancellationToken);
     }
 
     private async Task RevokeAllAsync(string userId, DateTime now, CancellationToken cancellationToken)

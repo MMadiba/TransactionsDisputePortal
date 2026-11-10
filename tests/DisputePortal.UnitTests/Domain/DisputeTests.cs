@@ -98,6 +98,7 @@ public sealed class DisputeTests
     public void A_closed_dispute_cannot_be_withdrawn_or_resolved_again()
     {
         var dispute = Open();
+        dispute.StartReview(Agent, Now);
         dispute.Resolve(DisputeOutcome.Declined, "The charge is valid.", Agent, Now.AddDays(1));
 
         Assert.Equal("dispute.not_open", Assert.Throws<DomainConflictException>(() => dispute.Withdraw(Customer, Now.AddDays(2))).Code);
@@ -115,6 +116,56 @@ public sealed class DisputeTests
     }
 
     [Fact]
+    public void Starting_a_review_assigns_the_dispute_to_that_agent()
+    {
+        var dispute = Open();
+
+        dispute.StartReview(Agent, Now);
+
+        Assert.Equal(Agent.UserId, dispute.ReviewerId);
+        Assert.Equal(Agent.Name, dispute.ReviewerName);
+    }
+
+    [Fact]
+    public void A_dispute_must_be_reviewed_before_it_is_resolved()
+    {
+        var dispute = Open();
+
+        var ex = Assert.Throws<DomainConflictException>(() => dispute.Resolve(DisputeOutcome.Upheld, "Refunded in full.", Agent, Now));
+
+        Assert.Equal("dispute.review_required", ex.Code);
+        Assert.Equal(DisputeStatus.Submitted, dispute.Status);
+    }
+
+    [Fact]
+    public void Only_the_reviewing_agent_can_resolve()
+    {
+        var dispute = Open();
+        dispute.StartReview(Agent, Now);
+        var colleague = Actor.Agent("agent-2", "Bo Backup");
+
+        var ex = Assert.Throws<DomainConflictException>(() => dispute.Resolve(DisputeOutcome.Upheld, "Refunded in full.", colleague, Now));
+
+        Assert.Equal("dispute.not_reviewer", ex.Code);
+        Assert.Equal(DisputeStatus.UnderReview, dispute.Status);
+    }
+
+    [Fact]
+    public void A_decided_dispute_keeps_blocking_new_ones_with_its_own_message()
+    {
+        var transaction = Debit();
+        var dispute = Open(transaction);
+        dispute.StartReview(Agent, Now);
+        dispute.Resolve(DisputeOutcome.Declined, "The charge is valid.", Agent, Now);
+
+        var result = Policy.Evaluate(transaction, dispute, Now);
+
+        Assert.True(dispute.BlocksNewDisputes);
+        Assert.False(result.CanDispute);
+        Assert.Equal("dispute.already_decided", result.Code);
+    }
+
+    [Fact]
     public void Only_the_customer_who_raised_it_can_withdraw()
     {
         var dispute = Open();
@@ -128,11 +179,11 @@ public sealed class DisputeTests
     public void Withdrawn_disputes_stop_blocking_new_ones()
     {
         var dispute = Open();
-        Assert.True(dispute.IsLive);
+        Assert.True(dispute.BlocksNewDisputes);
 
         dispute.Withdraw(Customer, Now);
 
-        Assert.False(dispute.IsLive);
+        Assert.False(dispute.BlocksNewDisputes);
         Assert.IsType<DisputeWithdrawn>(dispute.DomainEvents.Last());
     }
 

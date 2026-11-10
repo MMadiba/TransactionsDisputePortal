@@ -22,14 +22,19 @@ public sealed class DisputeEligibilityPolicy
 
     public int WindowDays { get; }
 
-    public EligibilityResult Evaluate(Transaction transaction, Dispute? liveDispute, DateTime nowUtc)
+    /// <param name="blockingDispute">The transaction's dispute that isn't withdrawn, if there is one.</param>
+    public EligibilityResult Evaluate(Transaction transaction, Dispute? blockingDispute, DateTime nowUtc)
     {
         ArgumentNullException.ThrowIfNull(transaction);
 
-        if (liveDispute is not null)
+        if (blockingDispute is not null)
         {
-            return new EligibilityResult(false, "dispute.already_exists",
-                $"This transaction already has a dispute ({liveDispute.Reference}).", IsConflict: true);
+            return blockingDispute.IsOpen
+                ? new EligibilityResult(false, "dispute.already_exists",
+                    $"This transaction already has a dispute ({blockingDispute.Reference}).", IsConflict: true)
+                : new EligibilityResult(false, "dispute.already_decided",
+                    $"We've already decided dispute {blockingDispute.Reference} for this transaction. If you disagree with the outcome, please call us.",
+                    IsConflict: true);
         }
 
         if (transaction.Status == TransactionStatus.Pending)

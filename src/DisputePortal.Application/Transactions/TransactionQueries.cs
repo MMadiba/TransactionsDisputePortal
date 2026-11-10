@@ -51,8 +51,8 @@ internal sealed class GetTransactionHandler(
         var transaction = await transactions.GetOwnedByAsync(query.TransactionId, query.CustomerId, cancellationToken)
             ?? throw Errors.TransactionNotFound();
 
-        var live = await disputes.FindLiveForTransactionAsync(transaction.Id, cancellationToken);
-        var eligibility = policy.Evaluate(transaction, live, clock.UtcNow);
+        var blocking = await disputes.FindBlockingForTransactionAsync(transaction.Id, cancellationToken);
+        var eligibility = policy.Evaluate(transaction, blocking, clock.UtcNow);
         var history = await disputeReadModel.ListForTransactionAsync(transaction.Id, cancellationToken);
 
         return new TransactionDetail(

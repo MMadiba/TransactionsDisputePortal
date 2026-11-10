@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DisputePortal.Infrastructure;
 
@@ -40,6 +41,12 @@ public static class DependencyInjection
         services.AddScoped<IDisputeReadModel, DisputeReadModel>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IAuthTokenService, AuthTokenService>();
+
+        // Domain events are saved to an outbox with each change and handled in the background.
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<OutboxSignal>();
+        services.AddSingleton<OutboxProcessor>();
+        services.AddHostedService<OutboxWorker>();
 
         return services;
     }

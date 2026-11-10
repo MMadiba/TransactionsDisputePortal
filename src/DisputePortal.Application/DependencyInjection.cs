@@ -1,3 +1,4 @@
+using System.Reflection;
 using DisputePortal.Application.Abstractions;
 using DisputePortal.Application.Common;
 using DisputePortal.Domain.Common;
@@ -57,8 +58,9 @@ internal sealed class DomainEventDispatcher(IServiceProvider services) : IDomain
             var handlerType = typeof(IDomainEventHandler<>).MakeGenericType(domainEvent.GetType());
             foreach (var handler in services.GetServices(handlerType))
             {
+                // DoNotWrapExceptions: a failing handler surfaces its own exception, not a TargetInvocationException.
                 await ((Task)handlerType.GetMethod(nameof(IDomainEventHandler<IDomainEvent>.HandleAsync))!
-                    .Invoke(handler, [domainEvent, cancellationToken])!).ConfigureAwait(false);
+                    .Invoke(handler, BindingFlags.DoNotWrapExceptions, null, [domainEvent, cancellationToken], null)!).ConfigureAwait(false);
             }
         }
     }

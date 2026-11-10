@@ -14,6 +14,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Dispute> Disputes => Set<Dispute>();
     public DbSet<DisputeHistoryEntry> DisputeHistory => Set<DisputeHistoryEntry>();
     internal DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    internal DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

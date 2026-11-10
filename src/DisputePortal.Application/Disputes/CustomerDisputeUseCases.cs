@@ -27,11 +27,11 @@ internal sealed class OpenDisputeHandler(
 
         var transaction = await transactions.GetOwnedByAsync(command.TransactionId, command.CustomerId, cancellationToken)
             ?? throw Errors.TransactionNotFound();
-        var live = await disputes.FindLiveForTransactionAsync(transaction.Id, cancellationToken);
+        var blocking = await disputes.FindBlockingForTransactionAsync(transaction.Id, cancellationToken);
         var customer = await Actors.CustomerAsync(users, command.CustomerId, cancellationToken);
 
         // All the rules live in the aggregate; the handler only orchestrates.
-        var dispute = Dispute.Open(transaction, live, policy, command.Request.Reason!.Value, command.Request.Details, customer, clock.UtcNow);
+        var dispute = Dispute.Open(transaction, blocking, policy, command.Request.Reason!.Value, command.Request.Details, customer, clock.UtcNow);
         disputes.Add(dispute);
 
         try
@@ -128,8 +128,11 @@ internal static class DisputeViews
     public static async Task<DisputeDetail> GetForCustomerAsync(IDisputeReadModel readModel, Guid disputeId, string customerId, CancellationToken cancellationToken)
     {
         var detail = await readModel.GetAsync(disputeId, customerId, cancellationToken) ?? throw Errors.DisputeNotFound();
+        // Customers deal with "the disputes team", never a named member of staff.
         return detail with
         {
+            ReviewerId = null,
+            ReviewerName = null,
             Timeline = detail.Timeline.Select(e => e with
             {
                 Actor = e.ActorRole switch

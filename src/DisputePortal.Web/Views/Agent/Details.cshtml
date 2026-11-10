@@ -3,6 +3,7 @@
     var d = Model.Dispute;
     ViewData["Title"] = $"Dispute {d.Reference}";
     ViewData["Audience"] = Audience.Agent;
+    var isMyReview = d.Status == DisputeStatus.UnderReview && d.ReviewerId == User.GetUserId();
     var outcomes = new[]
     {
         new SelectListItem("Uphold — refund the customer", nameof(DisputeOutcome.Upheld)),
@@ -29,28 +30,35 @@
 
             @if (d.Status == DisputeStatus.Submitted)
             {
-                <form method="post" asp-action="StartReview" asp-route-id="@d.Id" class="mb-4">
-                    <button type="submit" class="btn btn-outline-primary">Start review</button>
-                    <span class="small text-muted ms-2">Lets the customer know someone is looking at it.</span>
+                <form method="post" asp-action="StartReview" asp-route-id="@d.Id">
+                    <button type="submit" class="btn btn-primary">Start review</button>
+                    <span class="small text-muted ms-2">Assigns the dispute to you. Only you can close it once you've picked it up.</span>
                 </form>
             }
-
-            <form method="post" asp-action="Resolve" asp-route-id="@d.Id" novalidate>
-                <div class="mb-3">
-                    <label asp-for="ResolveForm!.Outcome" class="form-label">Outcome</label>
-                    <select asp-for="ResolveForm!.Outcome" asp-items="outcomes" class="form-select">
-                        <option value="">Choose an outcome…</option>
-                    </select>
-                    <span asp-validation-for="ResolveForm!.Outcome" class="text-danger small"></span>
-                </div>
-                <div class="mb-3">
-                    <label asp-for="ResolveForm!.Note" class="form-label"></label>
-                    <textarea asp-for="ResolveForm!.Note" class="form-control" rows="3" maxlength="1000"
-                              placeholder="The customer will see this note exactly as written."></textarea>
-                    <span asp-validation-for="ResolveForm!.Note" class="text-danger small"></span>
-                </div>
-                <button type="submit" class="btn btn-primary">Close dispute</button>
-            </form>
+            else if (!isMyReview)
+            {
+                <p class="mb-0">@d.ReviewerName is reviewing this dispute. Only they can close it.</p>
+            }
+            else
+            {
+                <p class="small text-muted">You're reviewing this dispute.</p>
+                <form method="post" asp-action="Resolve" asp-route-id="@d.Id" novalidate>
+                    <div class="mb-3">
+                        <label asp-for="ResolveForm!.Outcome" class="form-label">Outcome</label>
+                        <select asp-for="ResolveForm!.Outcome" asp-items="outcomes" class="form-select">
+                            <option value="">Choose an outcome…</option>
+                        </select>
+                        <span asp-validation-for="ResolveForm!.Outcome" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="ResolveForm!.Note" class="form-label"></label>
+                        <textarea asp-for="ResolveForm!.Note" class="form-control" rows="3" maxlength="1000"
+                                  placeholder="The customer will see this note exactly as written."></textarea>
+                        <span asp-validation-for="ResolveForm!.Note" class="text-danger small"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Close dispute</button>
+                </form>
+            }
         </div>
     </div>
 }

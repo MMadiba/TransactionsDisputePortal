@@ -27,6 +27,10 @@ public sealed class Dispute : AggregateRoot
     public DateTime? ClosedAtUtc { get; private set; }
     public string? ResolutionNote { get; private set; }
 
+    /// <summary>The agent who picked the dispute up. Only they can close it.</summary>
+    public string? ReviewerId { get; private set; }
+    public string? ReviewerName { get; private set; }
+
     /// <summary>Optimistic concurrency token, rotated on every change.</summary>
     public Guid Version { get; private set; }
 
@@ -34,8 +38,13 @@ public sealed class Dispute : AggregateRoot
 
     public bool IsOpen => Status is DisputeStatus.Submitted or DisputeStatus.UnderReview;
 
-    /// <summary>Whether this dispute stops another one being raised on the same transaction.</summary>
-    public bool IsLive => Status != DisputeStatus.Withdrawn;
+    /// <summary>
+    /// Whether this dispute stops another one being raised on the same transaction. A transaction gets one
+    /// decision: while a dispute is open, or once it has been upheld or declined, the customer can't raise
+    /// another. A declined outcome is final in the portal and appeals go through the bank's complaints
+    /// process. Only a withdrawn dispute frees the transaction up again.
+    /// </summary>
+    public bool BlocksNewDisputes => Status != DisputeStatus.Withdrawn;
 
     /// <summary>
     /// Raises a dispute. The eligibility policy is applied here, inside the aggregate, so there is no way to
@@ -43,7 +52,7 @@ public sealed class Dispute : AggregateRoot
     /// </summary>
     public static Dispute Open(
         Transaction transaction,
-        Dispute? liveDispute,
+        Dispute? blockingDispute,
         DisputeEligibilityPolicy policy,
         DisputeReason reason,
         string details,
@@ -59,7 +68,7 @@ public sealed class Dispute : AggregateRoot
             throw new BusinessRuleViolationException("dispute.not_owner", "Only the account holder can dispute a transaction.");
         }
 
-        var eligibility = policy.Evaluate(transaction, liveDispute, nowUtc);
+        var eligibility = policy.Evaluate(transaction, blockingDispute, nowUtc);
         if (!eligibility.CanDispute)
         {
             throw eligibility.IsConflict
@@ -101,6 +110,8 @@ public sealed class Dispute : AggregateRoot
             throw new DomainConflictException("dispute.invalid_state", $"You can't start a review on dispute {Reference} while it is {Status}.");
         }
 
+        ReviewerId = agent.UserId;
+        ReviewerName = agent.Name;
         Transition(DisputeStatus.UnderReview, agent, null, nowUtc);
         Raise(new DisputeReviewStarted(Id, Reference, agent.UserId, nowUtc));
     }
@@ -109,6 +120,20 @@ public sealed class Dispute : AggregateRoot
     {
         EnsureAgent(agent);
         EnsureOpen("resolve");
+
+        // Review is a required step, and the dispute belongs to whoever picked it up, so two agents can't
+        // both work the same case and nobody closes a dispute they haven't looked at.
+        if (Status != DisputeStatus.UnderReview)
+        {
+            throw new DomainConflictException("dispute.review_required",
+                $"Start a review on dispute {Reference} before closing it.");
+        }
+
+        if (agent.UserId != ReviewerId)
+        {
+            throw new DomainConflictException("dispute.not_reviewer",
+                $"Dispute {Reference} is being reviewed by {ReviewerName}. Only they can close it.");
+        }
 
         note = note?.Trim() ?? string.Empty;
         if (note.Length is < DisputeLimits.ResolutionNoteMinLength or > DisputeLimits.ResolutionNoteMaxLength)

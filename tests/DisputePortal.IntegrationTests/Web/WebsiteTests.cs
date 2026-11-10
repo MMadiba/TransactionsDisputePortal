@@ -148,6 +148,25 @@ public sealed partial class WebsiteTests(PortalFactory factory)
         Assert.Contains("AccessDenied", response.Headers.Location!.OriginalString);
     }
 
+    [Theory]
+    [InlineData("/Identity/Account/Login")]
+    [InlineData("/Identity/Account/ForgotPassword")]
+    public async Task Pages_send_a_strict_content_security_policy(string path)
+    {
+        var response = await NoRedirectClient().GetAsync(path);
+
+        var policy = Assert.Single(response.Headers.GetValues("Content-Security-Policy"));
+        Assert.Contains("script-src 'self'", policy);
+        Assert.Contains("frame-ancestors 'none'", policy);
+        Assert.DoesNotContain("unsafe-inline", policy);
+
+        // Everything the page loads must be allowed by that policy: local scripts only, nothing inline.
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("/lib/jquery-validation/dist/jquery.validate.min", html);
+        Assert.DoesNotContain("cdnjs", html);
+        Assert.DoesNotMatch("<script>", html);
+    }
+
     [Fact]
     public async Task Signed_out_visitors_go_straight_to_the_login_page()
     {

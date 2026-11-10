@@ -25,17 +25,18 @@ internal sealed class DisputeRepository(ApplicationDbContext db) : IDisputeRepos
     public Task<Dispute?> GetOwnedByAsync(Guid disputeId, string customerId, CancellationToken cancellationToken) =>
         Aggregates.SingleOrDefaultAsync(d => d.Id == disputeId && d.CustomerId == customerId, cancellationToken);
 
-    public Task<Dispute?> FindLiveForTransactionAsync(Guid transactionId, CancellationToken cancellationToken) =>
+    public Task<Dispute?> FindBlockingForTransactionAsync(Guid transactionId, CancellationToken cancellationToken) =>
         Aggregates.FirstOrDefaultAsync(d => d.TransactionId == transactionId && d.Status != DisputeStatus.Withdrawn, cancellationToken);
 
     public void Add(Dispute dispute) => db.Disputes.Add(dispute);
 }
 
 /// <summary>
-/// Saves everything tracked in this scope in one transaction, translates provider errors into
-/// application exceptions, and only then publishes the domain events that were raised.
+/// Saves everything tracked in this scope in one transaction and translates provider errors into application
+/// exceptions. Domain events raised by the aggregates are written to the outbox in that same transaction, and
+/// handled afterwards by the <see cref="OutboxWorker"/>, so a failing handler can never undo or hide a save.
 /// </summary>
-internal sealed class UnitOfWork(ApplicationDbContext db, IDomainEventDispatcher dispatcher) : IUnitOfWork
+internal sealed class UnitOfWork(ApplicationDbContext db, OutboxSignal outbox, TimeProvider time) : IUnitOfWork
 {
     private const int SqliteConstraint = 19;
     private const int SqliteConstraintUnique = 2067;
@@ -47,7 +48,10 @@ internal sealed class UnitOfWork(ApplicationDbContext db, IDomainEventDispatcher
             .Select(e => e.Entity)
             .Where(a => a.DomainEvents.Count > 0)
             .ToList();
-        var events = aggregates.SelectMany(a => a.DomainEvents).ToList();
+
+        var now = time.GetUtcNow().UtcDateTime;
+        var messages = aggregates.SelectMany(a => a.DomainEvents).Select(e => OutboxSerializer.ToMessage(e, now)).ToList();
+        db.OutboxMessages.AddRange(messages);
 
         try
         {
@@ -55,6 +59,7 @@ internal sealed class UnitOfWork(ApplicationDbContext db, IDomainEventDispatcher
         }
         catch (DbUpdateConcurrencyException ex)
         {
+            DetachOutbox(messages);
             throw new ConcurrencyConflictException(ex);
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqliteException
@@ -63,10 +68,18 @@ internal sealed class UnitOfWork(ApplicationDbContext db, IDomainEventDispatcher
             SqliteExtendedErrorCode: SqliteConstraintUnique or SqliteConstraintPrimaryKey
         })
         {
+            DetachOutbox(messages);
             throw new UniqueConstraintConflictException(ex);
         }
 
         aggregates.ForEach(a => a.ClearDomainEvents());
-        await dispatcher.DispatchAsync(events, cancellationToken);
+        if (messages.Count > 0)
+        {
+            outbox.Notify();
+        }
     }
+
+    // A failed save leaves the events on the aggregates; drop the rows so a retry doesn't write them twice.
+    private void DetachOutbox(List<OutboxMessage> messages) =>
+        messages.ForEach(m => db.Entry(m).State = EntityState.Detached);
 }

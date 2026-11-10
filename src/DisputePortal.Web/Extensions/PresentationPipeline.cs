@@ -21,9 +21,25 @@ public static class PresentationPipeline
         app.UseWhen(ctx => !ctx.Request.Path.StartsWithSegments("/api"),
             site => site.UseStatusCodePagesWithReExecute("/Home/Status/{0}"));
 
+        // Everything the site needs is served from its own origin, so the policy can stay strict: no inline
+        // scripts, no third-party hosts. Bootstrap's form icons are data: URIs, hence img-src.
+        var contentSecurityPolicy = string.Join("; ",
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self'",
+            "img-src 'self' data:",
+            "font-src 'self'",
+            // Hot reload in Development talks to the IDE over a websocket on another port.
+            app.Environment.IsDevelopment() ? "connect-src 'self' ws: wss:" : "connect-src 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "object-src 'none'");
+
         app.Use(async (context, next) =>
         {
             var headers = context.Response.Headers;
+            headers.ContentSecurityPolicy = contentSecurityPolicy;
             headers.XContentTypeOptions = "nosniff";
             headers.XFrameOptions = "DENY";
             headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
