@@ -14,15 +14,11 @@ namespace DisputePortal.Infrastructure;
 
 public static class DependencyInjection
 {
-    /// <param name="configureIdentity">
-    /// Lets the host extend Identity (e.g. add the default UI) without Infrastructure knowing about the web layer.
-    /// </param>
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, Action<IdentityBuilder>? configureIdentity = null)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
         // Identity's SignInManager needs the authentication core services; the host adds the actual schemes.
         services.AddAuthentication();
-        var identity = services.AddPortalIdentity();
-        configureIdentity?.Invoke(identity);
+        services.AddPortalIdentity();
 
         services.AddOptions<DatabaseOptions>().BindConfiguration(DatabaseOptions.SectionName);
         services.AddOptions<DemoDataOptions>().BindConfiguration(DemoDataOptions.SectionName);
@@ -52,8 +48,8 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Identity core (users, roles, EF stores, sign-in manager, lockout). The host decides how people
-    /// authenticate (cookies, JWT) and whether to add the Identity UI on top.
+    /// Identity core: users, roles, EF stores, password hashing and lockout. There are no Identity pages;
+    /// people sign in through the token endpoint, which checks passwords with the sign-in manager.
     /// </summary>
     private static IdentityBuilder AddPortalIdentity(this IServiceCollection services) =>
         services.AddIdentityCore<ApplicationUser>(options =>

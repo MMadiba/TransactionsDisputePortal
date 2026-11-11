@@ -20,7 +20,7 @@
     <ProjectReference Include="..\..\src\DisputePortal.Domain\DisputePortal.Domain.csproj" />
     <ProjectReference Include="..\..\src\DisputePortal.Application\DisputePortal.Application.csproj" />
     <ProjectReference Include="..\..\src\DisputePortal.Infrastructure\DisputePortal.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\DisputePortal.Web\DisputePortal.Web.csproj" />
+    <ProjectReference Include="..\..\src\DisputePortal.Api\DisputePortal.Api.csproj" />
   </ItemGroup>
 
 </Project>

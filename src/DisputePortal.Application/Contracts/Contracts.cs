@@ -74,8 +74,12 @@ public sealed record DisputeDetail(
     string? ReviewerId,
     string? ReviewerName);
 
+/// <param name="RefreshToken">
+/// The refresh token, or null when it was set as an HttpOnly cookie instead (browser sign-in), so page
+/// scripts never see it.
+/// </param>
 public sealed record AuthTokens(
-    string TokenType, string AccessToken, int ExpiresIn, string RefreshToken, DateTime RefreshTokenExpiresAtUtc);
+    string TokenType, string AccessToken, int ExpiresIn, string? RefreshToken, DateTime RefreshTokenExpiresAtUtc);
 
 public enum AuthFailure
 {
@@ -99,8 +103,8 @@ public enum DisputeFilter
 }
 
 // ---------- Requests ----------
-// Mutable classes (not records) so MVC forms can bind to them. The same DataAnnotations drive the HTML
-// form, the API's automatic 400 response and the handler's own check.
+// The same DataAnnotations drive the API's automatic 400 response and the handler's own check. The React
+// app mirrors the limits in its form schemas so most mistakes are caught before a round trip.
 
 public sealed class OpenDisputeRequest
 {
@@ -127,6 +131,11 @@ public sealed class ResolveDisputeRequest
     public string Note { get; set; } = string.Empty;
 }
 
-public sealed record AccessTokenRequest([Required, EmailAddress] string Email, [Required] string Password);
+/// <param name="UseCookie">
+/// Browsers set this: the refresh token then comes back as an HttpOnly cookie that only /api/auth reads,
+/// rather than in the response body.
+/// </param>
+public sealed record AccessTokenRequest([Required, EmailAddress] string Email, [Required] string Password, bool UseCookie = false);
 
-public sealed record RefreshTokenRequest([Required] string RefreshToken);
+/// <param name="RefreshToken">The refresh token. Leave it out to use the refresh-token cookie instead.</param>
+public sealed record RefreshTokenRequest(string? RefreshToken);

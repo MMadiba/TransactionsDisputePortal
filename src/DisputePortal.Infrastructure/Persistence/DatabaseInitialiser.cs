@@ -90,7 +90,7 @@ public static class DatabaseInitialiser
 /// </summary>
 internal static class DemoDataSeeder
 {
-    // Demo accounts on the bank's own domain. Nothing is ever emailed to them: the portal uses a no-op email sender.
+    // Demo accounts on the bank's own domain. Nothing is ever emailed to them: the portal sends no email.
     public const string AgentEmail = "naledi.khumalo@mmbank.co.za";
     public const string AmandaEmail = "amanda.mitchell@mmbank.co.za";
     public const string SiphoEmail = "sipho.dlamini@mmbank.co.za";

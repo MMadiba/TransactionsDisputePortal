@@ -8,14 +8,14 @@ namespace DisputePortal.UnitTests.Architecture;
 
 /// <summary>
 /// Guards the clean-architecture dependency rule: dependencies point inwards only
-/// (Web → Infrastructure → Application → Domain). A violation fails the build, not a code review.
+/// (Api → Infrastructure → Application → Domain). A violation fails the build, not a code review.
 /// </summary>
 public sealed class LayeringTests
 {
     private static readonly Assembly Domain = typeof(AggregateRoot).Assembly;
     private static readonly Assembly Application = typeof(IUnitOfWork).Assembly;
     private static readonly Assembly Infrastructure = typeof(ApplicationDbContext).Assembly;
-    private static readonly Assembly Web = typeof(Program).Assembly;
+    private static readonly Assembly Api = typeof(Program).Assembly;
 
     private static IEnumerable<string> References(Assembly assembly) =>
         assembly.GetReferencedAssemblies().Select(a => a.Name!);
@@ -30,7 +30,7 @@ public sealed class LayeringTests
 
     [Theory]
     [InlineData("DisputePortal.Infrastructure")]
-    [InlineData("DisputePortal.Web")]
+    [InlineData("DisputePortal.Api")]
     [InlineData("Microsoft.EntityFrameworkCore")]
     [InlineData("Microsoft.AspNetCore")]
     public void Application_does_not_depend_on_outer_layers_or_frameworks(string forbiddenPrefix)
@@ -41,13 +41,13 @@ public sealed class LayeringTests
     [Fact]
     public void Infrastructure_does_not_depend_on_the_web_host()
     {
-        Assert.DoesNotContain(References(Infrastructure), name => name == Web.GetName().Name);
+        Assert.DoesNotContain(References(Infrastructure), name => name == Api.GetName().Name);
     }
 
     [Fact]
     public void Controllers_never_touch_the_database_directly()
     {
-        var controllers = Web.GetTypes().Where(t => typeof(ControllerBase).IsAssignableFrom(t) && !t.IsAbstract);
+        var controllers = Api.GetTypes().Where(t => typeof(ControllerBase).IsAssignableFrom(t) && !t.IsAbstract);
 
         var offenders =
             from controller in controllers

@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
 
+# ---- client: test and build the React app (cached on package files only) ----
+FROM node:24-alpine AS client
+WORKDIR /src/DisputePortal.Client
+COPY src/DisputePortal.Client/package.json src/DisputePortal.Client/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY src/DisputePortal.Client/ ./
+# The build writes to ../DisputePortal.Api/wwwroot, i.e. /src/DisputePortal.Api/wwwroot here.
+RUN npm test && npm run build
+
 # ---- build: restore (cached on project files only), then compile ----
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
@@ -8,13 +17,15 @@ COPY global.json Directory.Build.props TransactionsDisputePortal.slnx dotnet-too
 COPY src/DisputePortal.Domain/DisputePortal.Domain.csproj src/DisputePortal.Domain/
 COPY src/DisputePortal.Application/DisputePortal.Application.csproj src/DisputePortal.Application/
 COPY src/DisputePortal.Infrastructure/DisputePortal.Infrastructure.csproj src/DisputePortal.Infrastructure/
-COPY src/DisputePortal.Web/DisputePortal.Web.csproj src/DisputePortal.Web/
+COPY src/DisputePortal.Api/DisputePortal.Api.csproj src/DisputePortal.Api/
+COPY src/DisputePortal.Client/DisputePortal.Client.esproj src/DisputePortal.Client/
 COPY tests/DisputePortal.UnitTests/DisputePortal.UnitTests.csproj tests/DisputePortal.UnitTests/
 COPY tests/DisputePortal.IntegrationTests/DisputePortal.IntegrationTests.csproj tests/DisputePortal.IntegrationTests/
 RUN dotnet restore TransactionsDisputePortal.slnx
 
 COPY src/ src/
 COPY tests/ tests/
+COPY --from=client /src/DisputePortal.Api/wwwroot src/DisputePortal.Api/wwwroot
 RUN dotnet build TransactionsDisputePortal.slnx -c Release --no-restore
 
 # ---- test: `docker build --target test .` runs the whole suite inside the container ----
@@ -23,7 +34,7 @@ RUN dotnet test TransactionsDisputePortal.slnx -c Release --no-build
 
 # ---- publish ----
 FROM build AS publish
-RUN dotnet publish src/DisputePortal.Web/DisputePortal.Web.csproj -c Release --no-build -o /app/publish /p:UseAppHost=false
+RUN dotnet publish src/DisputePortal.Api/DisputePortal.Api.csproj -c Release --no-build -o /app/publish /p:UseAppHost=false
 
 # ---- runtime: small ASP.NET image, non-root user ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
@@ -44,4 +55,4 @@ COPY --from=publish /app/publish .
 
 USER $APP_UID
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "DisputePortal.Web.dll"]
+ENTRYPOINT ["dotnet", "DisputePortal.Api.dll"]

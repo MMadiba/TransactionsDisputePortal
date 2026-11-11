@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.7204101">
+  <!--
+    Puts the React app in the solution so Visual Studio shows it, starts it (npm run dev) and runs its
+    Vitest tests in Test Explorer. The solution marks it Build="false", so `dotnet build` and `dotnet test`
+    stay Node-free; building this project on its own runs npm install and npm run build.
+  -->
+  <PropertyGroup>
+    <StartupCommand>npm run dev</StartupCommand>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
+    <JavaScriptTestFramework>Vitest</JavaScriptTestFramework>
+    <BuildOutputFolder>$(MSBuildProjectDirectory)\..\DisputePortal.Api\wwwroot</BuildOutputFolder>
+  </PropertyGroup>
+</Project>

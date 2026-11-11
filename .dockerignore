@@ -14,3 +14,7 @@
 README.md
 Dockerfile
 .dockerignore
+**/node_modules/
+src/DisputePortal.Client/test-results/
+src/DisputePortal.Client/playwright-report/
+src/DisputePortal.Api/wwwroot/

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace DisputePortal.Application.Common;
 
 /// <summary>
-/// Handlers re-check their input even though MVC/the API already did: the application layer is the trust
+/// Handlers re-check their input even though the API already did: the application layer is the trust
 /// boundary, and it keeps every use case safe to call from anywhere (tests, jobs, a future UI).
 /// </summary>
 internal static class RequestValidator

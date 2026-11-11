@@ -481,3 +481,9 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 data/
+
+# The React app (src/DisputePortal.Client) is built into the API project at build time.
+src/DisputePortal.Api/wwwroot/
+src/DisputePortal.Client/node_modules/
+src/DisputePortal.Client/test-results/
+src/DisputePortal.Client/playwright-report/
